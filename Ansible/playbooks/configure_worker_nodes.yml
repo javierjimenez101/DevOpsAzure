@@ -1,0 +1,36 @@
+#########################################################################
+#                                                                       #
+# Playbook Ansible para su ejecución en los nodos workers               #
+#                                                                       #
+#########################################################################
+---
+# Ejecución en todos los servidores etiquetados kubernetes-worker-nodes en el archivo hosts.
+- hosts: kubernetes-worker-nodes
+  # Ejecución con escalado de privilegios.
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  # Reglas de acceso en el firewall 
+  - name: Access rules from Workers
+    shell: |
+      firewall-cmd --zone=public --permanent --add-port={10250,30000-32767}/tcp
+      firewall-cmd --reload
+      
+  # Copiamos el archivo con la salida de kubeadm init --pod-network-cidr
+  - name: Copying token to worker nodes
+    copy: src={{ token_file }} dest=join_token
+  
+  # Ejecuta en cada uno de los nodos workers las dos últimas líneas de la salida al inicializar
+  # la red pod-network-cidr y que se correponden con el comando "join" para los nodos en el cluster.
+  - name: Joining worker nodes with kubernetes master
+    shell: |
+     kubeadm reset -f
+     cat join_token | tail -2 > out.sh
+     sh out.sh
+	
+  # Monta unidad NFS en workers
+#  - name: Mount nfs
+#    shell: |
+#	    mkdir -p /srv/nfs
+#	    mount nfs.devopsunir.com:/srv/nfs /srv/nfs

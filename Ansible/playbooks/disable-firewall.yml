@@ -1,0 +1,15 @@
+##############################################################################
+#                                                                            #
+# Playbook Ansible para deshabilitar el firewall del S.O. de los servidores. #
+#                                                                            #
+##############################################################################
+---
+- hosts: all
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  - name: Disable firewall
+    shell: |
+      systemctl disable firewalld
+      systemctl stop firewalld

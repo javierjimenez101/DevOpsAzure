@@ -1,0 +1,74 @@
+#########################################################################
+#                                                                       #
+# Playbook Ansible despliegue aplicación de ejemplo                     #
+#                                                                       #
+# - Despliegue aplicación                                               #
+# - Despliegue ingress para su acceso desde el exterior                 #
+# - Configuración antiaffinity para desplegar en 2 pods distintos       #
+#                                                                       #
+#########################################################################
+
+---
+- hosts: kubernetes-master-nodes
+  # Escalado de privilegios (root).
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  
+  # Creando namespace para la aplicación.
+  - name: Create namespace
+    shell: kubectl create namespace webapp-routed
+  
+  # Despliegue del contenedor.
+  - name: Deploy application
+    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/first-routed-webapp/first-routed-webapp.yaml
+
+  # Espera a que el contenedor se encuentre listo.
+  - name: Wait for app pod to come up
+    shell: kubectl get pods --namespace=webapp-routed -o json
+    register: kubectl_get_pods
+    until: kubectl_get_pods.stdout|from_json|json_query('items[0].status.phase') == "Running"
+    retries: 20    
+
+  # Desplegando ingress para acceso exterior.
+  - name: Deploy ingress
+    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/first-routed-webapp/ingress.yaml
+    
+  - name: Deploy configmap
+    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/first-routed-webapp/configmap.yaml    
+    
+  # Escalado a 2 replicas.
+  - name: Scaling up...
+    shell: kubectl scale --replicas=2 deployment/webapp-routed --namespace=webapp-routed
+  
+  # Esperando a que todas las réplicas estén en estado 'Running'
+  - name: Wait for app pod to come up
+    shell: kubectl get pods --namespace=webapp-routed -o json
+    register: kubectl_get_pods
+    until: kubectl_get_pods.stdout|from_json|json_query('items[0].status.phase') == "Running"
+    retries: 20
+    
+  # Creando namespace antiaffinity.
+  - name: Creating antiaffinity namespace...
+    shell: kubectl create namespace webapp-antiaffinity
+    
+  # Desplegando antiaffinity.
+  - name: Deploy app antiaffinity mode...
+    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/webapp-antiaffinity/webapp-antiaffinity.yaml
+    
+  # Creando namespace ejemplo NFS
+#  - name: Deploy app NFS...
+#    shell: kubectl create namespace webapp-volumes
+    
+  # Definiendo PersistentVolume
+#  - name: Deploy app PersistentVolume
+#    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/webapp-volumes/nfs-pv.yaml
+    
+  # Asignando volumen 
+#  - name: Assign volume...
+#    shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/webapp-volumes/nfs-pvc.yaml
+    
+  # Desplegando aplicación
+#  - name: Deploy NFS application
+#   - shell: kubectl apply -f /home/adminunir/DevOpsUnir/Kubernetes/labs/webapp-volumes/webapp-volumes.yaml

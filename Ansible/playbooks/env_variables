@@ -1,0 +1,35 @@
+##############################################################################
+#                                                                            #
+# Variables de entorno a utilizar en Playbooks Ansible                       #
+#                                                                            #
+##############################################################################
+
+# IP servidor Master.
+ad_addr: 10.1.1.4
+
+# Red POD's
+pod_cidr: 10.1.2.0/24
+
+# Servicios a habilitar.
+services:
+- firewalld
+
+# Puertos a abrir en el nodo master.
+master_ports:
+- "6443/tcp"
+- "2379-2380/tcp"
+- "10250-10252/tcp"
+- "8285/udp"
+- "8472/udp"
+
+# Puertos a abrir en los nodos workers.
+worker_ports:
+- "6443/tcp"
+- "10250-10252/tcp"
+- "8285/udp"
+- "8472/udp"
+- "30000-32767/tcp"
+
+# Archivo en el que se almacenará la salida del script de creación del
+# cluster y que contendrá el comando para hacer 'join' desde los workers.
+token_file: join_token

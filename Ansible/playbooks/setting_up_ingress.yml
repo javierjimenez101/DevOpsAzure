@@ -1,0 +1,32 @@
+#########################################################################
+#                                                                       #
+# Playbook Ansible instalación controlador ingress en el nodo master    #
+#                                                                       #
+#########################################################################
+---
+- hosts: kubernetes-master-nodes
+  # Escalado de privilegios.
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  # Esperamos a que todos los nodos se encuentren en estado 'Ready'
+  - name: Wait for nodes to be ready
+    shell: kubectl get nodes
+    register: nodes
+    until:      
+      - '" Ready "  in nodes.stdout'      
+    retries: 20
+    
+  # Despliegue controlador ingress HAProxy.
+  - name: Deploy Ingress Controller
+    shell: |
+      kubectl apply -f https://raw.githubusercontent.com/haproxytech/kubernetes-ingress/v1.5/deploy/haproxy-ingress.yaml
+
+  # Esperamos a que todos los pods se encuentren en estado 'Running'
+  - name: Wait for pods to come up
+    shell: kubectl get pods --namespace=haproxy-controller -o json
+    register: kubectl_get_pods
+    until: kubectl_get_pods.stdout|from_json|json_query('items[0].status.phase') == "Running"
+    retries: 20  
+  

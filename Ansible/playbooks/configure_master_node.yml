@@ -1,0 +1,82 @@
+#########################################################################
+#                                                                       #
+# Playbook Ansible para su ejecución en el nodo Master                  #
+#                                                                       #
+#########################################################################
+---
+- hosts: kubernetes-master-nodes
+  # Ejecución con escalado de privilegios.
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  - name: Access rules from Workers
+    shell: |
+      firewall-cmd --permanent --add-port=6443/tcp
+      firewall-cmd --permanent --add-port=2379-2380/tcp
+      firewall-cmd --permanent --add-port=10250/tcp
+      firewall-cmd --permanent --add-port=10251/tcp
+      firewall-cmd --permanent --add-port=10252/tcp
+      firewall-cmd --permanent --add-port=10255/tcp
+      firewall-cmd --permanent --add-rich-rule 'rule family=ipv4 source address=10.1.0.5/32 accept'
+      firewall-cmd --permanent --add-rich-rule 'rule family=ipv4 source address=10.1.0.6/32 accept'
+      firewall-cmd --zone=public --permanent --add-rich-rule 'rule family=ipv4 source address=172.17.0.0/16 accept'
+      firewall-cmd --reload
+      
+  - name: Pulling images required for setting up a Kubernetes cluster
+    shell: kubeadm config images pull
+    
+  - name: Initializing Kubernetes cluster
+    shell: kubeadm init --apiserver-advertise-address {{ad_addr}} --pod-network-cidr={{pod_cidr}}
+    register: output
+    
+  # Copia el contenido de la salida del comando anterior y lo almacenta en el archivo indicado como variable token_file
+  - name: Storing Logs and Generated token for future purpose.
+    local_action: copy content={{ output.stdout }} dest={{ token_file }}
+    become: False
+    
+  # Configuración para la ejecución comandos k8s por el usuario root
+  - name: .kube/config
+    shell: |
+      mkdir -p $HOME/.kube
+      cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+      chown $(id -u):$(id -g) $HOME/.kube/config    
+      
+  # Instalación de Cilium como SDN
+  - name: Install Cilium
+    command: kubectl create -f https://raw.githubusercontent.com/cilium/cilium/v1.9/install/kubernetes/quick-install.yaml
+
+#  - name: Install SDN Calico
+#    shell: kubectl create -f https://docs.projectcalico.org/manifests/tigera-operator.yaml      
+    
+#  - name: Custom Resources
+#    shell: wget https://docs.projectcalico.org/manifests/custom-resources.yaml    
+    
+#  - name: Update Custom Resources
+#    shell: sed -i 's/192.168.0.0\/16/{{pod_cidr}}/g' custom-resources.yaml
+    
+#  - name: Install Calico
+#    shell: kubectl apply -f custom-resources.yaml    
+  
+  # Espera a que todos los nodos se encuentren en estado 'Ready'
+  - name: Wait for nodes to be ready
+    shell: kubectl get nodes
+    register: nodes
+    until:      
+      - '" Ready "  in nodes.stdout'      
+    retries: 20
+  
+  # Espera a que todos los pods se encuentren en estado 'Running'
+  - name: Wait for pods to come up
+    shell: kubectl get pods -A -o json
+    register: kubectl_get_pods
+    until: kubectl_get_pods.stdout|from_json|json_query('items[0].status.phase') == "Running"
+    retries: 20    
+
+  # Configuración para la ejecución comandos k8s por el usuario root
+  - name: Kubernetes user config to adminunir user
+    shell: |
+      mkdir /home/adminunir/.kube
+      cp -i /etc/kubernetes/admin.conf /home/adminunir/.kube/config
+      chown -R adminunir:adminunir /home/adminunir/.kube  
+

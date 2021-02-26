@@ -1,0 +1,52 @@
+#########################################################################
+#                                                                       #
+# Playbook Ansible para la configuración de los nodos de K8S            #
+#                                                                       #
+#########################################################################
+---
+- hosts: all
+  # Escalado de privilegios
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+  
+  # Creamos archivo configuración repositorio Kubernetes.
+  - name: Creating a repository file for Kubernetes
+    file:
+     path: /etc/yum.repos.d/kubernetes.repo
+     state: touch
+     
+  # Configuramos archivo repositorio Kubernetes.
+  - name: Adding repository details in Kubernetes repo file.
+    blockinfile:
+     path: /etc/yum.repos.d/kubernetes.repo
+     block: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+      enabled=1
+      gpgcheck=1
+      repo_gpgcheck=1
+      gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+      exclude=kubelet kubeadm kubectl
+      
+  # Instalando Kubernetes en todos los nodos.
+  - name: Install Kubernetes
+    shell: |
+      dnf install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+      systemctl enable kubelet
+      systemctl start kubelet
+      
+  # Habilitando puertos en el firewall.
+  - name: Allow Network Ports in Firewalld
+    firewalld:
+     port: "{{ item }}"
+     state: enabled
+     permanent: yes
+     immediate: yes
+    with_items: "{{ master_ports if ('kubernetes-master-nodes' in group_names) else worker_ports }}"
+
+#  - name: Enabling Bridge Firewall Rule
+#    shell: "echo '1' > /proc/sys/net/bridge/bridge-nf-call-iptables"
+   

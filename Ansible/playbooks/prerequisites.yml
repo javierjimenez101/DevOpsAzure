@@ -1,0 +1,73 @@
+##############################################################################
+#                                                                            #
+# Playbook Ansible con los requisitos de instalación en todos los nodos k8s  #
+#                                                                            #
+##############################################################################
+---
+- hosts: all
+  # Ejecución con escalado de privilegios.
+  become: yes
+  vars_files:
+  - env_variables
+  tasks:
+#  - name: Update system
+#    shell: dnf update -y
+    
+  # Inicia los servicios indicados en el archivo env_variables.
+  - name: Starting and Enabling the required services
+    service:
+     name: "{{ item }}"
+     state: started
+     enabled: yes
+    with_items: "{{ services }}"  
+  
+  # Configuración archivo /etc/hosts para la resolución de nombres
+  - name: Set Hostnames
+    shell: |
+      echo '10.1.4.4 bastion.devopsunir.com' >> /etc/hosts
+      echo '10.1.1.4 master.devopsunir.com' >> /etc/hosts
+      echo '10.1.1.5 back1.devopsunir.com' >> /etc/hosts
+      echo '10.1.1.6 back2.devopsunir.com' >> /etc/hosts
+      echo '10.1.1.4 nfs.devopsunir.com' >> /etc/hosts
+  
+  # Habilitamos la comunicación entre POD's a través de VXLAN
+  - name: Net Filter
+    shell: |
+      modprobe br_netfilter
+      firewall-cmd --add-masquerade --permanent
+      firewall-cmd --reload
+  
+  # Permitir que kubernetes maneje correctamente el tráfico con el cortafuegos
+  - name: Kubernetes firewall access
+    shell: |
+      cat <<-EOF > /etc/sysctl.d/k8s.conf
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      EOF
+      sysctl --system
+      
+  # Desahabilitamos SELinux
+  - name: Disable SELinux
+    shell: |
+      setenforce 0
+      sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+      setenforce 0
+      
+  # Deshabilitamos Swap
+  - name: Disabling Swap on all nodes
+    shell: swapoff -a
+
+  # Deshabilitamos Swap del arranque del sistema.
+  - name: Commenting Swap entries in /etc/fstab
+    replace:
+     path: /etc/fstab
+     regexp: '(^/.*swap*)'
+     replace: '# \1'
+     
+  # Instalación Docker.
+  - name: Installing Docker
+    shell: |
+     dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+     dnf install docker-ce-19.03.14-3.el8 containerd.io -y
+     systemctl enable docker
+     systemctl start docker

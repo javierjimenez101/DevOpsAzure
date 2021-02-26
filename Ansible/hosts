@@ -1,0 +1,14 @@
+[kubernetes-master-nodes]
+master.devopsunir.com ansible_host=10.1.1.4 ansible_ssh_private_key_file=/home/adminunir/.ssh/id_rsa_azure_unir
+
+[kubernetes-worker-nodes]
+back1.devopsunir.com ansible_host=10.1.1.5 ansible_ssh_private_key_file=/home/adminunir/.ssh/id_rsa_azure_unir
+back2.devopsunir.com ansible_host=10.1.1.6 ansible_ssh_private_key_file=/home/adminunir/.ssh/id_rsa_azure_unir
+
+[kubernetes:children]
+kubernetes-worker-nodes
+kubernetes-master-nodes
+
+[kubernetes:vars]
+ansible_ssh_user=adminunir
+ansible_user=adminunir
